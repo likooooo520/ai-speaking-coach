@@ -8,6 +8,12 @@ __pycache__/
 venv/
 *.egg-info/
 
+# 测试与覆盖率产物
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+
 # IDE / OS
 .idea/
 .vscode/
