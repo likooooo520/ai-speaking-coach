@@ -17,11 +17,13 @@ class InterventionPolicy:
                in_targeted_practice: Optional[bool] = None) -> InterventionDecision:
         mode = self._mode(mode)
         context = self._context(session_context)
-        practiced = recently_practiced if recently_practiced is not None else context.get("recently_practiced", False)
-        active = in_targeted_practice if in_targeted_practice is not None else context.get("in_targeted_practice", False)
+        item = self._target_evidence(evidence, priority)
+        # 同一事实可能来自显式入参、Session 上下文或 Evidence。PriorityEngine 读取的是
+        # Evidence，这里必须按同样顺序回退，否则「刚练过」的守卫会整条失效。
+        practiced = self._resolve(recently_practiced, context, "recently_practiced", item)
+        active = self._resolve(in_targeted_practice, context, "in_targeted_practice", None)
         if not observation.is_valid or priority is None:
             return self._decision(InterventionType.CONTINUE, "没有可执行的英语学习信号", priority, mode)
-        item = evidence.error if priority.target_type == "error" else evidence.naturalness
         if getattr(item, "asr_uncertain", False) or context.get("system_error", False):
             return self._decision(InterventionType.CONTINUE, "信号不确定，暂不将其视为英语错误", priority, mode)
         requested = getattr(item, "user_requested", False) is True
@@ -49,6 +51,22 @@ class InterventionPolicy:
         return InterventionDecision(type=kind, reason=reason, priority=priority.level if priority else PriorityLevel.LOW,
                                     evidence=priority.reasons if priority else [], mode=mode,
                                     should_create_task=task, task_reason=task_reason)
+
+    @staticmethod
+    def _target_evidence(evidence: Evidence, priority: Optional[PriorityResult]):
+        """取出优先级指向的那一类证据。"""
+        if priority is None:
+            return None
+        return evidence.error if priority.target_type == "error" else evidence.naturalness
+
+    @staticmethod
+    def _resolve(explicit, context, key, item):
+        """显式入参 > Session 上下文 > Evidence，保证两层看到同一事实。"""
+        if explicit is not None:
+            return explicit
+        if key in context:
+            return context[key]
+        return getattr(item, key, False) if item is not None else False
 
     @staticmethod
     def _context(value):

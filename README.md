@@ -83,8 +83,25 @@ python app/main.py
 ## 测试
 
 ```bash
-python -m unittest discover -s tests -v
+python -m pip install pytest pytest-cov
+python -m pytest tests -q --cov=app --cov-report=term
 ```
+
+当前 193 个用例全部通过，核心决策层覆盖率为 95%。
+
+## 评测
+
+`evals/` 是决策链的**规格符合性评测**：43 条标注场景 + 8 条直接从规格文档提取的不变量
+（ASR 不确定不介入、未请求不建任务、单次错误不高优先级等）。
+
+```bash
+python -m evals.run_decision_eval
+```
+
+首次运行定位到 3 处实现与规格的偏差——浮点误差导致优先级阈值边界失效、
+`recently_practiced` 在 Priority 与 Intervention 两层数据源不一致导致守卫失效、
+无效 Observation 仍产出优先级。修复后 43/43 场景与 8/8 不变量全部通过。
+方法与缺陷记录见 [`evals/README.md`](evals/README.md)。
 
 ## 范围说明
 

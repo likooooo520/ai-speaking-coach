@@ -49,22 +49,24 @@ Windows 控制台若中文乱码，先设置 `PYTHONIOENCODING=utf-8`（脚本�
 
 ```
 场景数        : 43
-动作准确率    : 97.7%
-优先级准确率  : 95.3%
+动作准确率    : 100.0%
+建任务准确率  : 100.0%
+优先级准确率  : 100.0%
 规格不变量    : 8/8 PASS
-场景符合性    : 40/43
+场景符合性    : 43/43
 ```
 
-## 5. 评测发现的缺陷
+首次运行（修复前）为 `40/43`、动作准确率 `97.7%`。评测定位到 3 处与规格不一致的行为（见 §5），
+修复后全部通过，且既有 193 个单元测试无回归。
 
-评测在实现中定位到 3 处与规格不一致的行为。这些是**评测的产出**，记录在此以便追踪。
+## 5. 评测定位到并已修复的缺陷
 
-### D1 · 阈值边界受浮点误差影响（`priority_engine`）
+这 3 处不是环境问题，是实现与规格的真实偏差，由本评测集首次运行时捕获。
+
+### D1 · 阈值边界受浮点误差影响（`priority_engine`）— 已修复
 
 `0.30 + 0.15 + 0.15 + 0.10 − 0.30` 在 IEEE 754 下等于 `0.39999999999999997`，
 小于阈值 `0.40`，于是本该判为 `medium` 的信号被判成 `low`。
-
-复现：
 
 ```python
 s = 0.30 + 0.15 + 0.15 + 0.10 - 0.30   # 0.39999999999999997
@@ -72,9 +74,10 @@ s >= 0.40                               # False，期望 True
 ```
 
 影响：所有落在阈值边界上的权重组合都会降一档，进而改变 `InterventionPolicy` 的介入档位。
-建议在累计完成后按统一精度取整后再比较。
 
-### D2 · `recently_practiced` 在两层之间数据源不一致
+**修复**：`PriorityEngine` 新增 `SCORE_PRECISION`，钳位后统一取整再比较等级。
+
+### D2 · `recently_practiced` 在两层之间数据源不一致 — 已修复
 
 `PriorityEngine` 读取 `evidence.error.recently_practiced` 并据此扣 0.15 分；
 但 `InterventionPolicy` 只从 `session_context`（或显式入参）读取同一事实，**不读 Evidence**。
@@ -82,11 +85,16 @@ s >= 0.40                               # False，期望 True
 后果：当该事实由 `ObservationBuilder` 写入 Evidence 时，「刚练过 → 延后复盘」的守卫
 不会触发，反而会创建新的专项训练任务，与「刚练习过不重复介入」的设计意图相悖。
 
-### D3 · `PriorityEngine` 不检查 `observation.is_valid`
+**修复**：`InterventionPolicy` 改为按 `显式入参 > Session 上下文 > Evidence` 的顺序回退，
+与 `PriorityEngine` 读取同一份事实。
+
+### D3 · `PriorityEngine` 不检查 `observation.is_valid` — 已修复
 
 无效 Observation 仍会产出 `PriorityResult`（例如 `0.30 / low`）。
-目前由 `InterventionPolicy` 的 `is_valid` 守卫兜住动作层，但优先级本身是无效值；
+动作层由 `InterventionPolicy` 的 `is_valid` 守卫兜住，但优先级本身是无效值，
 若后续有消费者直接读取 Priority，会拿到不该存在的信号。
+
+**修复**：`evaluate()` 在入口处对无效 Observation 直接返回 `None`。
 
 ## 6. 扩展方式
 

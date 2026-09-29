@@ -8,6 +8,10 @@ from app.domain.priority import PriorityResult, priority_level
 class PriorityEngine:
     """使用确定性规则选择值得关注的当前学习信号，不产生副作用。"""
 
+    # 权重均为两位小数，累加会产生 IEEE 754 误差（例如 0.30+0.15+0.15+0.10-0.30
+    # = 0.39999999999999997），不取整会让刚好落在阈值上的信号被降一档。
+    SCORE_PRECISION = 10
+
     ERROR_WEIGHTS = {
         "current_error": 0.30,
         "historical_match": 0.15,
@@ -29,6 +33,10 @@ class PriorityEngine:
     def evaluate(self, observation: Observation, evidence: Evidence,
                  session_context: Any = None) -> Optional[PriorityResult]:
         del session_context  # 为后续阶段保留扩展点
+        if not observation.is_valid:
+            # 无效 Observation（例如本轮分析不可用）不应产生任何学习信号，
+            # 否则下游若直接读取 Priority 会拿到不该存在的关注点。
+            return None
         candidates = []
         if evidence.error.current_error_detected:
             candidates.append(self._error(observation, evidence))
@@ -85,9 +93,10 @@ class PriorityEngine:
             reasons.append("recently_practiced_penalty")
         return score, reasons
 
-    @staticmethod
-    def _result(target_type, target_key, score, reasons):
+    @classmethod
+    def _result(cls, target_type, target_key, score, reasons):
         score = max(0.0, min(1.0, score))
+        score = round(score, cls.SCORE_PRECISION)
         return PriorityResult(target_type=target_type, target_key=target_key,
                               score=score, level=priority_level(score), reasons=reasons)
 
