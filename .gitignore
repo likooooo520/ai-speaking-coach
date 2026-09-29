@@ -15,6 +15,7 @@ venv/
 Thumbs.db
 
 # 运行时数据：包含本地录音与个人学习记录，不进入版本库
-data/
+# 只忽略仓库根目录的 data/，不要误伤 evals/data 这类评测数据
+/data/
 *.wav
 *.webm
