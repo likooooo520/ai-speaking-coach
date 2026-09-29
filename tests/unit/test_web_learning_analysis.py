@@ -48,14 +48,9 @@ class WebLearningAnalysisTests(unittest.TestCase):
 
         session.speak("hello")
 
-        self.assertEqual(
-            session.coach.set_session_context.call_args.kwargs["coach_mode"],
-            "business_coach",
-        )
-        self.assertEqual(
-            session.coach.set_session_context.call_args.kwargs["feedback_intensity"],
-            "strong",
-        )
+        context = session.processor.process.call_args.args[0]
+        self.assertEqual(context.coach_mode, "business_coach")
+        self.assertEqual(context.feedback_intensity, "strong")
 
     def test_analysis_failure_does_not_fail_turn(self):
         session = self.make_session()
@@ -202,8 +197,11 @@ class WebLearningAnalysisTests(unittest.TestCase):
         )
         session.speak("second")
 
-        context_values = [call.kwargs.get("coaching_context") for call in session.coach.set_session_context.call_args_list]
-        self.assertIn(session.coaching_context[0]["prompt"], context_values)
+        context_values = [call.args[0].coaching_context for call in session.processor.process.call_args_list]
+        self.assertTrue(
+            any(session.coaching_context[0]["prompt"] in value for value in context_values),
+            "coaching prompt should reach the coach session context",
+        )
         self.assertTrue(session.coaching_context[0]["consumed"])
 
     def test_review_later_is_deferred_without_changing_current_reply(self):
@@ -305,10 +303,10 @@ class WebLearningAnalysisTests(unittest.TestCase):
 
         session.speak("I led a small project.")
 
-        kwargs = session.coach.set_session_context.call_args.kwargs
-        self.assertEqual(kwargs["coach_mode"], "business_coach")
-        self.assertEqual(kwargs["session_difficulty"], session.difficulty)
-        self.assertIn("interviewer", kwargs["professional_context"])
+        context = session.processor.process.call_args.args[0]
+        self.assertEqual(context.coach_mode, "business_coach")
+        self.assertEqual(context.session_difficulty, session.difficulty)
+        self.assertIn("interviewer", context.professional_context)
 
 
 if __name__ == "__main__":
