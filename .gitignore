@@ -1,0 +1,20 @@
+# 密钥
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# 运行时数据：包含本地录音与个人学习记录，不进入版本库
+data/
+*.wav
+*.webm
